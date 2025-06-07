@@ -6,6 +6,9 @@
 .. include:: ../README.rst
     :start-after: Demo of thx in watch mode
 
+`thx` will use the `uv <https://github.com/astral-sh/uv>`_ package manager for
+creating virtual environments when it is available.
+
 .. toctree::
     :hidden:
     :maxdepth: 2

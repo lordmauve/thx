@@ -22,6 +22,11 @@ in the `PEP 518 <https://peps.python.org/pep-0518/>`_ standardized ``pyproject.t
 Jobs can be run on multiple Python versions at once, and independent steps can be
 executed in parallel for faster results.
 
+When installed, `thx` uses the `uv <https://github.com/astral-sh/uv>`_ package
+manager to create virtual environments and install dependencies. The default
+``builder`` setting will auto-detect ``uv`` and fall back to ``pip`` when
+necessary.
+
 Watch `thx` format the codebase, build sphinx docs, run the test and linter suites on
 five Python versions, and generate a final coverage report:
 

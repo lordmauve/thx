@@ -194,7 +194,7 @@ class ThxWatchdogHandler(FileSystemEventHandler):
         self.__excludes = gitignore(self.__root) + pathspec(self.EXCLUDES)
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        source_path = Path(event.src_path).resolve()
+        source_path = Path(str(event.src_path)).resolve()
 
         if source_path.is_dir():
             return
@@ -233,7 +233,7 @@ class ThxWatchdogHandler(FileSystemEventHandler):
             watch_paths = {config.root / "pyproject.toml"} | config.watch_paths
 
         for path in watch_paths:
-            observer.schedule(self, config.root / path, recursive=True)
+            observer.schedule(self, str(config.root / path), recursive=True)
 
     def signal(self, *args: Any) -> None:
         LOG.warning("ctrl-c")
