@@ -169,6 +169,10 @@ def identify_venv(venv_path: Path) -> Tuple[Path, Version]:
         python_path = bin_dir / candidate
         if python_path.exists():
             break
+        if os.name == "nt":
+            python_path = python_path.with_suffix(".exe")
+            if python_path.exists():
+                break
     else:
         raise ConfigError(f"venv {venv_path} does not contain a Python interpreter")
     return python_path, version

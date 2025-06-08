@@ -643,3 +643,20 @@ class ContextTest(TestCase):
                     ),
                 ]
             )
+
+    @patch("platform.system", return_value="Windows")
+    def test_identify_venv_windows(self, system_mock: Mock) -> None:
+        """identify_venv should locate python.exe on Windows."""
+        with TemporaryDirectory() as td:
+            tdp = Path(td)
+            venv = tdp / "venv"
+            bin_dir = venv / "Scripts"
+            bin_dir.mkdir(parents=True)
+            (venv / "pyvenv.cfg").write_text("version = 3.12\n")
+            exe = bin_dir / "python.exe"
+            exe.touch()
+
+            with patch("thx.context.os.name", "nt"):
+                python_path, version = context.identify_venv(venv)
+            self.assertEqual(exe, python_path)
+            self.assertEqual(Version("3.12"), version)
