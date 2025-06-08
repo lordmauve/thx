@@ -547,17 +547,22 @@ class ContextTest(TestCase):
 
     @patch("thx.context.determine_builder", return_value=Builder.UV)
     @patch("thx.context.find_runtime")
-    def test_resolve_contexts_uv_filter(self, runtime_mock: Mock, det_mock: Mock) -> None:
+    def test_resolve_contexts_uv_filter(
+        self, runtime_mock: Mock, det_mock: Mock
+    ) -> None:
         """resolve_contexts should honor requested version filters with uv."""
         with TemporaryDirectory() as td:
             tdp = Path(td).resolve()
             versions = [Version("3.9"), Version("3.10")]
             config = Config(root=tdp, versions=versions, builder=Builder.UV)
-            result = context.resolve_contexts(
-                config, Options(python=Version("3.9"))
-            )
+            result = context.resolve_contexts(config, Options(python=Version("3.9")))
             expected = [
-                Context(Version("3.9"), None, context.venv_path(config, Version("3.9")), Builder.UV)
+                Context(
+                    Version("3.9"),
+                    None,
+                    context.venv_path(config, Version("3.9")),
+                    Builder.UV,
+                )
             ]
             self.assertListEqual(expected, result)
             runtime_mock.assert_not_called()
@@ -572,7 +577,10 @@ class ContextTest(TestCase):
         run_mock: Mock,
     ) -> None:
         """Virtualenv preparation via uv should call expected commands."""
-        async def fake_check_command(cmd: Sequence[StrPath], context: Optional[Context] = None) -> CommandResult:
+
+        async def fake_check_command(
+            cmd: Sequence[StrPath], context: Optional[Context] = None
+        ) -> CommandResult:
             return CommandResult(0, "", "")
 
         run_mock.side_effect = fake_check_command
@@ -604,26 +612,34 @@ class ContextTest(TestCase):
 
             run_mock.assert_has_calls(
                 [
-                    call([
-                        "/usr/bin/uv",
-                        "venv",
-                        f"--prompt=thx-{ctx.python_version}",
-                        "-p",
-                        str(ctx.python_version),
-                        str(ctx.venv),
-                    ]),
-                    call([
-                        "/usr/bin/uv",
-                        "pip",
-                        "install",
-                        "-r",
-                        str(req),
-                    ], context=ctx),
-                    call([
-                        "/usr/bin/uv",
-                        "pip",
-                        "install",
-                        f"{config.root}[xtra]",
-                    ], context=ctx),
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "venv",
+                            f"--prompt=thx-{ctx.python_version}",
+                            "-p",
+                            str(ctx.python_version),
+                            str(ctx.venv),
+                        ]
+                    ),
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "pip",
+                            "install",
+                            "-r",
+                            str(req),
+                        ],
+                        context=ctx,
+                    ),
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "pip",
+                            "install",
+                            f"{config.root}[xtra]",
+                        ],
+                        context=ctx,
+                    ),
                 ]
             )
