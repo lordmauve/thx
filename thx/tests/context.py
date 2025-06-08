@@ -18,6 +18,7 @@ from ..types import (
     Builder,
     CommandResult,
     Config,
+    ConfigError,
     Context,
     Event,
     Options,
@@ -506,3 +507,156 @@ class ContextTest(TestCase):
             for event in expected:
                 self.assertIn(event, events)
             venv_mock.assert_has_calls([call(ctx, config) for ctx in contexts])
+
+    @patch("thx.context.shutil.which", new=Mock(return_value="/usr/bin/uv"))
+    def test_determine_builder_auto_uv(self) -> None:
+        """Builder.AUTO should prefer uv when available."""
+        config = Config(builder=Builder.AUTO)
+        result = context.determine_builder(config)
+        self.assertEqual(Builder.UV, result)
+
+    @patch("thx.context.shutil.which", new=Mock(return_value=None))
+    def test_determine_builder_auto_no_uv(self) -> None:
+        """Builder.AUTO should fall back to pip when uv is missing."""
+        config = Config(builder=Builder.AUTO)
+        result = context.determine_builder(config)
+        self.assertEqual(Builder.PIP, result)
+
+    @patch("thx.context.shutil.which", new=Mock(return_value=None))
+    def test_determine_builder_uv_missing(self) -> None:
+        """Builder.UV should raise ConfigError if uv isn't installed."""
+        config = Config(builder=Builder.UV)
+        with self.assertRaises(ConfigError):
+            context.determine_builder(config)
+
+    @patch("thx.context.determine_builder", return_value=Builder.UV)
+    @patch("thx.context.find_runtime")
+    def test_resolve_contexts_uv(self, runtime_mock: Mock, det_mock: Mock) -> None:
+        """resolve_contexts should build uv contexts without runtime discovery."""
+        with TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            versions = [Version("3.9"), Version("3.10")]
+            config = Config(root=tdp, versions=versions, builder=Builder.UV)
+            result = context.resolve_contexts(config, Options())
+            expected = [
+                Context(v, None, context.venv_path(config, v), Builder.UV)
+                for v in versions
+            ]
+            self.assertListEqual(expected, result)
+            runtime_mock.assert_not_called()
+
+    @patch("thx.context.determine_builder", return_value=Builder.UV)
+    @patch("thx.context.find_runtime")
+    def test_resolve_contexts_uv_filter(
+        self, runtime_mock: Mock, det_mock: Mock
+    ) -> None:
+        """resolve_contexts should honor requested version filters with uv."""
+        with TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            versions = [Version("3.9"), Version("3.10")]
+            config = Config(root=tdp, versions=versions, builder=Builder.UV)
+            result = context.resolve_contexts(config, Options(python=Version("3.9")))
+            expected = [
+                Context(
+                    Version("3.9"),
+                    None,
+                    context.venv_path(config, Version("3.9")),
+                    Builder.UV,
+                )
+            ]
+            self.assertListEqual(expected, result)
+            runtime_mock.assert_not_called()
+
+    @patch("thx.context.check_command")
+    @patch("thx.context.identify_venv")
+    @patch("thx.context.shutil.which", new=Mock(return_value="/usr/bin/uv"))
+    @async_test
+    async def test_prepare_virtualenv_uv(
+        self,
+        identity_mock: Mock,
+        run_mock: Mock,
+    ) -> None:
+        """Virtualenv preparation via uv should call expected commands."""
+
+        async def fake_check_command(
+            cmd: Sequence[StrPath], context: Optional[Context] = None
+        ) -> CommandResult:
+            return CommandResult(0, "", "")
+
+        run_mock.side_effect = fake_check_command
+
+        with TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            req = tdp / "requirements.txt"
+            req.write_text("\n")
+
+            venv = tdp / ".thx" / "venv" / "3.9"
+            venv.mkdir(parents=True)
+
+            identity_mock.return_value = (
+                Path(venv / "bin/python"),
+                Version("3.9"),
+            )
+
+            config = Config(root=tdp, builder=Builder.UV, extras=["xtra"])
+            ctx = Context(Version("3.9"), None, venv, builder=Builder.UV)
+
+            events = [event async for event in context.prepare_virtualenv(ctx, config)]
+            expected = [
+                VenvCreate(ctx, "creating virtualenv"),
+                VenvCreate(ctx, "installing requirements via uv"),
+                VenvCreate(ctx, "installing project via uv"),
+                VenvReady(ctx),
+            ]
+            self.assertEqual(expected, events)
+
+            run_mock.assert_has_calls(
+                [
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "venv",
+                            f"--prompt=thx-{ctx.python_version}",
+                            "-p",
+                            str(ctx.python_version),
+                            str(ctx.venv),
+                        ]
+                    ),
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "pip",
+                            "install",
+                            "-r",
+                            str(req),
+                        ],
+                        context=ctx,
+                    ),
+                    call(
+                        [
+                            "/usr/bin/uv",
+                            "pip",
+                            "install",
+                            f"{config.root}[xtra]",
+                        ],
+                        context=ctx,
+                    ),
+                ]
+            )
+
+    @patch("platform.system", return_value="Windows")
+    def test_identify_venv_windows(self, system_mock: Mock) -> None:
+        """identify_venv should locate python.exe on Windows."""
+        with TemporaryDirectory() as td:
+            tdp = Path(td)
+            venv = tdp / "venv"
+            bin_dir = venv / "Scripts"
+            bin_dir.mkdir(parents=True)
+            (venv / "pyvenv.cfg").write_text("version = 3.12\n")
+            exe = bin_dir / "python.exe"
+            exe.touch()
+
+            with patch("thx.context.os.name", "nt"):
+                python_path, version = context.identify_venv(venv)
+            self.assertEqual(exe, python_path)
+            self.assertEqual(Version("3.12"), version)

@@ -105,8 +105,6 @@ class timed:
 
 
 def get_timings() -> List[timed]:
-    global TIMINGS
-
     result = list(sorted(TIMINGS))
     TIMINGS.clear()
     return result

@@ -103,6 +103,15 @@ The following project-level options are supported in the ``[tool.thx]`` table:
     ``.gitignore`` will not trigger watch behavior, even if specified in
     :attr:`watch_paths`.
 
+.. attribute:: builder
+    :type: Literal['auto', 'pip', 'uv']
+    :value: auto
+
+    Selects the tool used to create and manage virtual environments. When set to
+    ``auto`` (the default), `thx` will prefer ``uv`` if it is available on the
+    system ``PATH`` and fall back to ``pip`` and the standard library ``venv``.
+    Set this to ``uv`` or ``pip`` to force a specific builder. If ``uv`` is
+    requested but not found, `thx` will raise :class:`ConfigError`.
 
 Jobs
 ----
