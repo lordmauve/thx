@@ -6,7 +6,7 @@ import platform
 import shutil
 from asyncio import iscoroutinefunction
 from dataclasses import dataclass, field, replace
-from functools import wraps
+from functools import lru_cache, wraps
 from itertools import zip_longest
 from pathlib import Path
 from time import monotonic_ns
@@ -126,6 +126,13 @@ def which(name: str, context: Context) -> str:
         if binary is None:
             return name
     return binary
+
+
+@lru_cache(maxsize=1)
+def locate_uv() -> Optional[str]:
+    """Locate the ``uv`` executable, if available."""
+
+    return shutil.which("uv")
 
 
 def version_match(versions: Iterable[Version], target: Version) -> List[Version]:
