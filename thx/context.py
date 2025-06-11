@@ -30,7 +30,7 @@ from .types import (
     VenvReady,
     Version,
 )
-from .utils import timed, venv_bin_path, version_match, which
+from .utils import locate_uv, timed, venv_bin_path, version_match, which
 
 LOG = logging.getLogger(__name__)
 PYTHON_VERSION_RE = re.compile(r"Python (\d+\.\d+[a-zA-Z0-9-_.]+)\+?")
@@ -318,7 +318,7 @@ def determine_builder(config: Config) -> Builder:
 
     If builder is auto, pick uv if available, else pip.
     """
-    uv = shutil.which("uv")
+    uv = locate_uv()
     if config.builder == Builder.AUTO:
         if uv is not None:
             return Builder.UV
@@ -410,7 +410,7 @@ async def prepare_virtualenv_uv(
     """Create and populate a venv using uv."""
     try:
         # Create the venv with uv
-        uv = shutil.which("uv")
+        uv = locate_uv()
         if not uv:
             raise ConfigError("uv not found on PATH, cannot build with uv")
 

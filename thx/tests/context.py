@@ -508,21 +508,21 @@ class ContextTest(TestCase):
                 self.assertIn(event, events)
             venv_mock.assert_has_calls([call(ctx, config) for ctx in contexts])
 
-    @patch("thx.context.shutil.which", new=Mock(return_value="/usr/bin/uv"))
+    @patch("thx.context.locate_uv", new=Mock(return_value="/usr/bin/uv"))
     def test_determine_builder_auto_uv(self) -> None:
         """Builder.AUTO should prefer uv when available."""
         config = Config(builder=Builder.AUTO)
         result = context.determine_builder(config)
         self.assertEqual(Builder.UV, result)
 
-    @patch("thx.context.shutil.which", new=Mock(return_value=None))
+    @patch("thx.context.locate_uv", new=Mock(return_value=None))
     def test_determine_builder_auto_no_uv(self) -> None:
         """Builder.AUTO should fall back to pip when uv is missing."""
         config = Config(builder=Builder.AUTO)
         result = context.determine_builder(config)
         self.assertEqual(Builder.PIP, result)
 
-    @patch("thx.context.shutil.which", new=Mock(return_value=None))
+    @patch("thx.context.locate_uv", new=Mock(return_value=None))
     def test_determine_builder_uv_missing(self) -> None:
         """Builder.UV should raise ConfigError if uv isn't installed."""
         config = Config(builder=Builder.UV)
@@ -569,7 +569,7 @@ class ContextTest(TestCase):
 
     @patch("thx.context.check_command")
     @patch("thx.context.identify_venv")
-    @patch("thx.context.shutil.which", new=Mock(return_value="/usr/bin/uv"))
+    @patch("thx.context.locate_uv", new=Mock(return_value="/usr/bin/uv"))
     @async_test
     async def test_prepare_virtualenv_uv(
         self,
