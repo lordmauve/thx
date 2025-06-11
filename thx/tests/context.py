@@ -343,7 +343,7 @@ class ContextTest(TestCase):
             tdp = Path(td).resolve()
 
             pyproj = tdp / "pyproject.toml"
-            pyproj.write_text("\n")
+            pyproj.write_text("[project]\nname='foo'\n")
             reqs = tdp / "requirements.txt"
             reqs.write_text("\n")
 
@@ -357,11 +357,23 @@ class ContextTest(TestCase):
             with self.subTest("fake venv"):
                 venv.mkdir(parents=True)
                 (venv / context.TIMESTAMP).write_text("0\n")
+                (venv / context.PYPROJECT_HASH).write_text(
+                    context.pyproject_hash(config)
+                )
                 self.assertFalse(context.needs_update(ctx, config))
 
-            with self.subTest("touch pyproject.toml"):
+            with self.subTest("touch unrelated"):
                 await asyncio.sleep(0.01)
-                pyproj.write_text("\n\n")
+                pyproj.write_text(
+                    "[project]\nname='foo'\n[tool.mypy]\nignore_missing_imports=true\n"
+                )
+                self.assertFalse(context.needs_update(ctx, config))
+
+            with self.subTest("touch tracked"):
+                await asyncio.sleep(0.01)
+                pyproj.write_text(
+                    "[project]\nname='bar'\n[tool.mypy]\nignore_missing_imports=true\n"
+                )
                 self.assertTrue(context.needs_update(ctx, config))
 
     @patch("thx.context.check_command")
