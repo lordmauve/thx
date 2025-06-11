@@ -180,7 +180,7 @@ def pyproject_hash(config: Config) -> str:
     selected: Dict[str, Any] = {}
     for key in PROJECT_REBUILD_KEYS:
         parts = key.split(".")
-        current = data
+        current: Any = data
         for part in parts:
             if not isinstance(current, Mapping) or part not in current:
                 current = None

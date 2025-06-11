@@ -166,7 +166,7 @@ def run(
     return 0
 
 
-class ThxWatchdogHandler(FileSystemEventHandler):
+class ThxWatchdogHandler(FileSystemEventHandler):  # type: ignore[misc]
     EXCLUDES = [
         "__pycache__",
         ".git",
