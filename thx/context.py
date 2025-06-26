@@ -8,6 +8,8 @@ import re
 import shutil
 import subprocess
 import time
+import hashlib
+import base64
 from itertools import chain
 from pathlib import Path
 from typing import AsyncIterator, Dict, List, Optional, Sequence, Tuple
@@ -19,6 +21,7 @@ from .types import (
     CommandError,
     Config,
     Context,
+    ContextSpec,
     Event,
     Options,
     StrPath,
@@ -35,8 +38,22 @@ PYTHON_VERSIONS: Dict[Path, Optional[Version]] = {}
 TIMESTAMP = "thx.timestamp"
 
 
-def venv_path(config: Config, version: Version) -> Path:
-    return config.root / ".thx" / "venv" / str(version)
+def context_spec_hash(spec: ContextSpec) -> str:
+    parts: List[str] = []
+    if spec.extras:
+        parts.append(",".join(sorted(spec.extras)))
+    if not parts:
+        return ""
+    digest = hashlib.sha1(";".join(parts).encode()).digest()
+    return base64.b32encode(digest).decode("ascii").lower().rstrip("=")
+
+
+def venv_path(config: Config, spec: ContextSpec) -> Path:
+    suffix = context_spec_hash(spec)
+    name = str(spec.python_version)
+    if suffix:
+        name = f"{name}-{suffix}"
+    return config.root / ".thx" / "venv" / name
 
 
 def runtime_version(binary: Path) -> Optional[Version]:
@@ -114,7 +131,9 @@ def resolve_contexts(config: Config, options: Options) -> List[Context]:
     if options.live or not config.versions:
         version = Version(platform.python_version().rstrip("+"))
         # defer resolving python path to after venv creation
-        return [Context(version, Path(""), venv_path(config, version), live=True)]
+        extras = tuple(config.extras)
+        spec = ContextSpec(version, extras)
+        return [Context(version, Path(""), venv_path(config, spec), live=True, extras=extras)]
 
     contexts: List[Context] = []
     missing_versions: List[Version] = []
@@ -124,8 +143,10 @@ def resolve_contexts(config: Config, options: Options) -> List[Context]:
         if runtime_path is None or runtime_version is None:
             missing_versions.append(version)
         else:
-            venv = venv_path(config, runtime_version)
-            contexts.append(Context(runtime_version, runtime_path, venv))
+            extras = tuple(config.extras)
+            spec = ContextSpec(runtime_version, extras)
+            venv = venv_path(config, spec)
+            contexts.append(Context(runtime_version, runtime_path, venv, extras=extras))
 
     if missing_versions:
         LOG.warning("missing Python versions: %r", [str(v) for v in missing_versions])
@@ -241,8 +262,9 @@ async def prepare_virtualenv(context: Context, config: Config) -> AsyncIterator[
 
             # install local project
             yield VenvCreate(context, message="installing project")
-            if config.extras:
-                proj = f"{config.root}[{','.join(config.extras)}]"
+            extras = context.extras
+            if extras:
+                proj = f"{config.root}[{','.join(extras)}]"
             else:
                 proj = str(config.root)
             await check_command([pip, "install", "--editable", proj])
@@ -267,3 +289,13 @@ async def prepare_contexts(
     gens = [prepare_virtualenv(context, config) for context in contexts]
     async for event in as_generated(gens):
         yield event
+
+
+def cleanup_venvs(config: Config, contexts: Sequence[Context]) -> None:
+    required = {context.venv for context in contexts}
+    root = config.root / ".thx" / "venv"
+    if not root.exists():
+        return
+    for path in root.iterdir():
+        if path not in required:
+            shutil.rmtree(path, ignore_errors=True)

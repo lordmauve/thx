@@ -24,8 +24,8 @@ from ..types import (
     Version,
 )
 
-FAKE_38 = Context(Version("3.8.6"), Path(""), Path(""))
-FAKE_39 = Context(Version("3.9.1"), Path(""), Path(""))
+FAKE_38 = Context(Version("3.8.6"), Path(""), Path(""), extras=())
+FAKE_39 = Context(Version("3.9.1"), Path(""), Path(""), extras=())
 
 
 @patch("thx.cli.Live", new_callable=MagicMock)

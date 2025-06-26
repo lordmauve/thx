@@ -49,6 +49,7 @@ def ensure_listish(value: Any, key: str) -> List[str]:
 def parse_job(name: str, data: Dict[str, Any]) -> Job:
     run: List[str]
     requires: List[str]
+    extras: List[str]
     once: bool = Job.once
     parallel: bool = Job.parallel
     show_output: bool = Job.show_output
@@ -56,13 +57,18 @@ def parse_job(name: str, data: Dict[str, Any]) -> Job:
     if isinstance(data, str):
         run = [data]
         requires = ()
+        extras = []
     elif isinstance(data, list):
         run = ensure_listish(data, f"tool.thx.jobs.{name}")
         requires = ()
+        extras = []
     elif isinstance(data, dict):
         run = ensure_listish(data.pop("run", None), f"tool.thx.jobs.{name}.run")
         requires = ensure_listish(
             data.pop("requires", None), f"tool.thx.jobs.{name}.requires"
+        )
+        extras = ensure_listish(
+            data.pop("extras", None), f"tool.thx.jobs.{name}.extras"
         )
         if "once" in data:
             once = bool(data.pop("once"))
@@ -80,6 +86,7 @@ def parse_job(name: str, data: Dict[str, Any]) -> Job:
         name=name,
         run=tuple(run),
         requires=tuple(requires),
+        extras=tuple(extras),
         once=once,
         parallel=parallel,
         show_output=show_output,

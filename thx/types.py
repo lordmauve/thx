@@ -22,6 +22,7 @@ from packaging.version import Version as PackagingVersion
 __all__ = [
     "Config",
     "ConfigError",
+    "ContextSpec",
     "Context",
     "Job",
     "Options",
@@ -56,6 +57,7 @@ class Job:
     name: str
     run: Sequence[str]
     requires: Sequence[str] = ()
+    extras: Sequence[str] = ()
     once: bool = False
     parallel: bool = False
     isolated: bool = False
@@ -64,6 +66,7 @@ class Job:
     def __post_init__(self) -> None:
         self.name = self.name.casefold()
         self.requires = tuple(r.casefold() for r in self.requires)
+        self.extras = tuple(self.extras)
 
 
 @dataclass
@@ -81,12 +84,24 @@ class Config:
         self.default = tuple(d.casefold() for d in self.default)
 
 
+@dataclass(frozen=True)
+class ContextSpec:
+    """Parameters that uniquely define a virtual environment."""
+
+    python_version: Version
+    extras: Sequence[str] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "extras", tuple(self.extras))
+
+
 @dataclass(unsafe_hash=True)
 class Context:
     python_version: Version
     python_path: Path
     venv: Path
     live: bool = False
+    extras: Sequence[str] = ()
 
 
 @dataclass
