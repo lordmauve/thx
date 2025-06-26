@@ -110,7 +110,7 @@ class ConfigTest(TestCase):
         ) as td:
             expected = Config(
                 root=td,
-                jobs={"hello": Job(name="hello", run=("echo hello",))},
+                jobs={"hello": Job(name="hello", run=("echo hello",), extras=())},
             )
             result = load_config(td)
             self.assertEqual(expected, result)
@@ -131,7 +131,7 @@ class ConfigTest(TestCase):
                 os.chdir(td)
                 expected = Config(
                     root=td,
-                    jobs={"hello": Job(name="hello", run=("echo hello",))},
+                    jobs={"hello": Job(name="hello", run=("echo hello",), extras=())},
                 )
                 result = load_config()
                 self.assertEqual(expected, result)
@@ -154,7 +154,7 @@ class ConfigTest(TestCase):
                 root=td,
                 default=["hello"],
                 jobs={
-                    "hello": Job(name="hello", run=("echo hello",)),
+                    "hello": Job(name="hello", run=("echo hello",), extras=()),
                     "lint": Job(
                         name="lint",
                         run=(
@@ -198,13 +198,14 @@ class ConfigTest(TestCase):
                 root=td,
                 default=["test", "lint"],
                 jobs={
-                    "format": Job(name="format", run=("black {module}",)),
+                    "format": Job(name="format", run=("black {module}",), extras=()),
                     "lint": Job(
                         name="lint",
                         run=(
                             "flake8 {module}",
                             "black --check {module}",
                         ),
+                        extras=(),
                     ),
                     "test": Job(
                         name="test",
@@ -212,9 +213,13 @@ class ConfigTest(TestCase):
                             "python -m unittest {module}",
                             "mypy {module}",
                         ),
+                        extras=(),
                     ),
                     "publish": Job(
-                        name="publish", run=("flit publish",), requires=("test", "lint")
+                        name="publish",
+                        run=("flit publish",),
+                        requires=("test", "lint"),
+                        extras=(),
                     ),
                 },
                 values={"module": "foobar", "something": "else"},
@@ -236,7 +241,7 @@ class ConfigTest(TestCase):
         ) as td:
             expected = Config(
                 root=td,
-                jobs={"hello": Job(name="hello", run=("echo hello",))},
+                jobs={"hello": Job(name="hello", run=("echo hello",), extras=())},
             )
             config = load_config(td)
             self.assertEqual(expected, config)
@@ -259,13 +264,14 @@ class ConfigTest(TestCase):
                 root=td,
                 default=["hello"],
                 jobs={
-                    "hello": Job(name="hello", run=("echo hello",)),
+                    "hello": Job(name="hello", run=("echo hello",), extras=()),
                     "lint": Job(
                         name="lint",
                         run=(
                             "flake8 {module}",
                             "black --check {module}",
                         ),
+                        extras=(),
                     ),
                 },
                 values={"module": "foobar"},
@@ -287,8 +293,8 @@ class ConfigTest(TestCase):
             expected = Config(
                 root=td,
                 jobs={
-                    "foo": Job(name="foo", run=(), once=False),
-                    "bar": Job(name="bar", run=(), once=True),
+                    "foo": Job(name="foo", run=(), extras=(), once=False),
+                    "bar": Job(name="bar", run=(), extras=(), once=True),
                 },
             )
             result = load_config(td)
@@ -308,8 +314,8 @@ class ConfigTest(TestCase):
             expected = Config(
                 root=td,
                 jobs={
-                    "foo": Job(name="foo", run=(), parallel=False),
-                    "bar": Job(name="bar", run=(), parallel=True),
+                    "foo": Job(name="foo", run=(), extras=(), parallel=False),
+                    "bar": Job(name="bar", run=(), extras=(), parallel=True),
                 },
             )
             result = load_config(td)
@@ -329,9 +335,24 @@ class ConfigTest(TestCase):
             expected = Config(
                 root=td,
                 jobs={
-                    "foo": Job(name="foo", run=(), show_output=False),
-                    "bar": Job(name="bar", run=(), show_output=True),
+                    "foo": Job(name="foo", run=(), extras=(), show_output=False),
+                    "bar": Job(name="bar", run=(), extras=(), show_output=True),
                 },
+            )
+            result = load_config(td)
+            self.assertDictEqual(expected.jobs, result.jobs)
+
+    def test_job_extras(self) -> None:
+        with fake_pyproject(
+            """
+            [tool.thx.jobs.foo]
+            run = []
+            extras = ["a", "b"]
+            """
+        ) as td:
+            expected = Config(
+                root=td,
+                jobs={"foo": Job(name="foo", run=(), extras=("a", "b"))},
             )
             result = load_config(td)
             self.assertDictEqual(expected.jobs, result.jobs)

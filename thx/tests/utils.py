@@ -50,7 +50,7 @@ class UtilTest(TestCase):
         self.assertIsNone(timing.step)
         self.assertRegex(str(timing), r"test message -> \s+ \d+ ms")
 
-        context = Context(Version("3.8"), Path(), Path())
+        context = Context(Version("3.8"), Path(), Path(), extras=())
         job = Job("foo", ())
         step = Step((), job, context)
 
@@ -68,7 +68,7 @@ class UtilTest(TestCase):
             await asyncio.sleep(0.02)
             return value * 2
 
-        context = Context(Version("3.8"), Path(), Path())
+        context = Context(Version("3.8"), Path(), Path(), extras=())
         job = Job("foo", ())
         step = Step((), job, context)
 
@@ -82,7 +82,7 @@ class UtilTest(TestCase):
 
     @patch("thx.utils.shutil.which")
     def test_which(self, which_mock: Mock) -> None:
-        context = Context(Version("3.10"), Path(), Path("/fake/venv"))
+        context = Context(Version("3.10"), Path(), Path("/fake/venv"), extras=())
         fake_venv_bin = (
             "/fake/venv/Scripts" if platform.system() == "Windows" else "/fake/venv/bin"
         )
