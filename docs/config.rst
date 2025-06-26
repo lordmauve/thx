@@ -79,6 +79,12 @@ The following project-level options are supported in the ``[tool.thx]`` table:
     This specifies a list of package "extras" or optional dpendendencies to be
     installed when initializing virtual environments and installing the project.
 
+.. attribute:: groups
+    :type: list[str]
+
+    Dependency groups to install when creating environments. By default the
+    ``dev`` group will be included.
+
 .. attribute:: python_versions
     :type: list[str]
 
@@ -90,9 +96,11 @@ The following project-level options are supported in the ``[tool.thx]`` table:
     :type: list[str]
 
     This specifies the list of dependency requirements files (relative to project root)
-    that `thx` will use when initializing virtual environments.
-    If not specified, `thx` will detect any files in the project root matching the glob
-    ``requirements*.txt``. Files must be usable by ``pip install -r``.
+    that `thx` will use when initializing virtual environments. If a ``uv.lock`` file
+    exists, it will be used instead and these requirement files are ignored.
+    If not specified and no ``uv.lock`` is present, `thx` will detect any files in the
+    project root matching the glob ``requirements*.txt``. Files must be usable by
+    ``pip install -r``.
 
 .. attribute:: watch_paths
     :type: list[str]

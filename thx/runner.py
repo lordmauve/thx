@@ -7,7 +7,7 @@ import os
 import shlex
 from asyncio.subprocess import PIPE
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Mapping
 
 from .types import (
     CommandError,
@@ -32,13 +32,18 @@ def render_command(run: str, context: Context, config: Config) -> Sequence[str]:
 
 
 async def run_command(
-    command: Sequence[StrPath], context: Optional[Context] = None
+    command: Sequence[StrPath],
+    context: Optional[Context] = None,
+    env: Optional[Mapping[str, str]] = None,
 ) -> CommandResult:
     cmd: Sequence[str] = [str(c) for c in command]
     new_env: Optional[Dict[str, str]] = None
-    if context:
+    if context or env:
         new_env = os.environ.copy()
-        new_env["PATH"] = f"{venv_bin_path(context.venv)}{os.pathsep}{new_env['PATH']}"
+        if context:
+            new_env["PATH"] = f"{venv_bin_path(context.venv)}{os.pathsep}{new_env['PATH']}"
+        if env:
+            new_env.update(env)
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=PIPE, stderr=PIPE, env=new_env
     )
@@ -51,8 +56,8 @@ async def run_command(
     )
 
 
-async def check_command(command: Sequence[StrPath]) -> CommandResult:
-    result = await run_command(command)
+async def check_command(command: Sequence[StrPath], *, env: Optional[Mapping[str, str]] = None, context: Optional[Context] = None) -> CommandResult:
+    result = await run_command(command, context=context, env=env)
 
     if result.error:
         raise CommandError(command, result)

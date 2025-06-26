@@ -49,14 +49,14 @@ class ConfigTest(TestCase):
 
     def test_no_pyproject(self) -> None:
         with fake_pyproject(None) as td:
-            expected = Config(root=td)
+            expected = Config(root=td, groups=["dev"])
             result = load_config(td)
             self.assertEqual(expected.root, result.root)
             self.assertEqual(expected, result)
 
     def test_empty_pyproject(self) -> None:
         with fake_pyproject("") as td:
-            expected = Config(root=td)
+            expected = Config(root=td, groups=["dev"])
             result = load_config(td)
             self.assertEqual(expected.root, result.root)
             self.assertEqual(expected, result)
@@ -68,7 +68,7 @@ class ConfigTest(TestCase):
             line_length = 37
             """
         ) as td:
-            expected = Config(root=td)
+            expected = Config(root=td, groups=["dev"])
             result = load_config(td)
             self.assertEqual(expected, result)
 
@@ -94,7 +94,7 @@ class ConfigTest(TestCase):
             line_length = 37
             """
         ) as td:
-            expected = Config(root=td)
+            expected = Config(root=td, groups=["dev"])
             result = load_config(td)
             self.assertEqual(expected, result)
 
@@ -111,6 +111,7 @@ class ConfigTest(TestCase):
             expected = Config(
                 root=td,
                 jobs={"hello": Job(name="hello", run=("echo hello",))},
+                groups=["dev"],
             )
             result = load_config(td)
             self.assertEqual(expected, result)
@@ -132,6 +133,7 @@ class ConfigTest(TestCase):
                 expected = Config(
                     root=td,
                     jobs={"hello": Job(name="hello", run=("echo hello",))},
+                    groups=["dev"],
                 )
                 result = load_config()
                 self.assertEqual(expected, result)
@@ -164,6 +166,7 @@ class ConfigTest(TestCase):
                     ),
                 },
                 values={"module": "foobar"},
+                groups=["dev"],
             )
             result = load_config(td)
             self.assertEqual(expected, result)
@@ -220,6 +223,7 @@ class ConfigTest(TestCase):
                 values={"module": "foobar", "something": "else"},
                 requirements=["requirements/dev.txt"],
                 extras=["docs"],
+                groups=["dev"],
                 watch_paths={Path("foobar"), Path("pyproject.toml")},
             )
             result = load_config(td)
@@ -237,6 +241,7 @@ class ConfigTest(TestCase):
             expected = Config(
                 root=td,
                 jobs={"hello": Job(name="hello", run=("echo hello",))},
+                groups=["dev"],
             )
             config = load_config(td)
             self.assertEqual(expected, config)
@@ -269,6 +274,7 @@ class ConfigTest(TestCase):
                     ),
                 },
                 values={"module": "foobar"},
+                groups=["dev"],
             )
             config2 = reload_config(config)
             self.assertEqual(expected2, config2)
@@ -290,6 +296,7 @@ class ConfigTest(TestCase):
                     "foo": Job(name="foo", run=(), once=False),
                     "bar": Job(name="bar", run=(), once=True),
                 },
+                groups=["dev"],
             )
             result = load_config(td)
             self.assertDictEqual(expected.jobs, result.jobs)
@@ -311,6 +318,7 @@ class ConfigTest(TestCase):
                     "foo": Job(name="foo", run=(), parallel=False),
                     "bar": Job(name="bar", run=(), parallel=True),
                 },
+                groups=["dev"],
             )
             result = load_config(td)
             self.assertDictEqual(expected.jobs, result.jobs)
@@ -332,6 +340,7 @@ class ConfigTest(TestCase):
                     "foo": Job(name="foo", run=(), show_output=False),
                     "bar": Job(name="bar", run=(), show_output=True),
                 },
+                groups=["dev"],
             )
             result = load_config(td)
             self.assertDictEqual(expected.jobs, result.jobs)

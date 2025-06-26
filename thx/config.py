@@ -129,7 +129,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     pyproject = root / "pyproject.toml"
 
     if not pyproject.is_file():
-        return Config(root=path)
+        return Config(root=path, groups=["dev"])
 
     content = pyproject.read_text()
     try:
@@ -152,6 +152,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         data.pop("requirements", None), "tool.thx.requirements"
     )
     extras: List[str] = ensure_listish(data.pop("extras", None), "tool.thx.extras")
+    groups: List[str] = ensure_listish(data.pop("groups", None), "tool.thx.groups") or ["dev"]
     watch_paths: Set[Path] = {
         Path(p)
         for p in ensure_listish(
@@ -172,6 +173,7 @@ def load_config(path: Optional[Path] = None) -> Config:
             versions=versions,
             requirements=requirements,
             extras=extras,
+            groups=groups,
             watch_paths=watch_paths,
         )
     )
