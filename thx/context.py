@@ -145,7 +145,11 @@ def resolve_contexts(config: Config, options: Options) -> List[Context]:
 
 
 def project_requirements(config: Config) -> Sequence[Path]:
-    """Get a list of Path objects for configured or discovered requirements files"""
+    """Get a list of requirement or lock files for the project"""
+    lock = config.root / "uv.lock"
+    if lock.exists():
+        return [lock]
+
     paths: List[Path] = []
     if config.requirements:
         paths += [(config.root / req) for req in config.requirements]
@@ -222,30 +226,40 @@ async def prepare_virtualenv(context: Context, config: Config) -> AsyncIterator[
             context.python_path = new_python_path or context.python_path
             context.python_version = new_python_version or context.python_version
 
-            # upgrade pip
-            yield VenvCreate(context, message="upgrading pip")
-            await check_command(
-                [context.python_path, "-m", "pip", "install", "-U", "pip", "setuptools"]
-            )
-            pip = which("pip", context)
-
-            # install requirements.txt
             requirements = project_requirements(config)
-            if requirements:
-                yield VenvCreate(context, message="installing requirements")
-                LOG.debug("installing deps from %s", requirements)
-                cmd: List[StrPath] = [pip, "install", "-U"]
-                for requirement in requirements:
-                    cmd.extend(["-r", requirement])
-                await check_command(cmd)
 
-            # install local project
-            yield VenvCreate(context, message="installing project")
-            if config.extras:
-                proj = f"{config.root}[{','.join(config.extras)}]"
+            if requirements and requirements[0].name == "uv.lock":
+                yield VenvCreate(context, message="installing with uv")
+                env = {"UV_PROJECT_ENVIRONMENT": str(context.venv)}
+                cmd: List[StrPath] = ["uv", "sync", "-p", str(context.python_path)]
+                for group in config.groups:
+                    cmd.extend(["--group", group])
+                for extra in config.extras:
+                    cmd.extend(["--extra", extra])
+                await check_command(cmd, env=env)
             else:
-                proj = str(config.root)
-            await check_command([pip, "install", "--editable", proj])
+                # upgrade pip
+                yield VenvCreate(context, message="upgrading pip")
+                await check_command(
+                    [context.python_path, "-m", "pip", "install", "-U", "pip", "setuptools"]
+                )
+                pip = which("pip", context)
+
+                if requirements:
+                    yield VenvCreate(context, message="installing requirements")
+                    LOG.debug("installing deps from %s", requirements)
+                    cmd: List[StrPath] = [pip, "install", "-U"]
+                    for requirement in requirements:
+                        cmd.extend(["-r", requirement])
+                    await check_command(cmd)
+
+                # install local project
+                yield VenvCreate(context, message="installing project")
+                if config.extras:
+                    proj = f"{config.root}[{','.join(config.extras)}]"
+                else:
+                    proj = str(config.root)
+                await check_command([pip, "install", "--editable", proj])
 
             # timestamp marker
             content = f"{time.time_ns()}\n"
