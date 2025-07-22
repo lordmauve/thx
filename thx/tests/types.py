@@ -22,7 +22,7 @@ class TypesTest(TestCase):
         self._td.cleanup()
 
     def fake_context(self) -> types.Context:
-        return types.Context(FAKE_VERSION, self._tdp / "bin" / "python", self._tdp)
+        return types.Context(FAKE_VERSION, self._tdp / "bin" / "python", self._tdp, extras=())
 
     def test_event_base(self) -> None:
         event = types.Event()

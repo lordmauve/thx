@@ -18,14 +18,14 @@ class RunnerTest(TestCase):
     def test_render_command(self, which_mock: Mock) -> None:
         which_mock.return_value = "/opt/bin/frobfrob"
         config = Config(values={"module": "alpha"})
-        context = Context(Version("3.8"), Path(), Path())
+        context = Context(Version("3.8"), Path(), Path(), extras=())
         result = runner.render_command("frobfrob check {module}.tests", context, config)
         self.assertEqual(("/opt/bin/frobfrob", "check", "alpha.tests"), result)
 
     @patch("thx.utils.shutil.which", return_value=None)
     def test_prepare_job(self, which_mock: Mock) -> None:
         config = Config(values={"module": "beta"})
-        context = Context(Version("3.9"), Path(), Path())
+        context = Context(Version("3.9"), Path(), Path(), extras=())
         run = [
             "echo 'hello world'",
             "flake8 {module}",
@@ -59,7 +59,7 @@ class RunnerTest(TestCase):
             expected = CommandResult(0, "nothing", "error!")
             self.assertEqual(expected, result)
 
-            ctx = Context(Version("3.8"), Path("/fake/python"), Path("/fake"))
+            ctx = Context(Version("3.8"), Path("/fake/python"), Path("/fake"), extras=())
             result = await runner.run_command(("/fake/binary", "something"), ctx)
             expected = CommandResult(0, "nothing", "error!")
             self.assertEqual(expected, result)
@@ -95,7 +95,7 @@ class RunnerTest(TestCase):
         step = runner.JobStep(
             ["python", "-c", "print('hello world')"],
             Job("echo", ["python -c \"print('hello world')\""]),
-            Context(Version("3.9"), Path(), Path()),
+            Context(Version("3.9"), Path(), Path(), extras=()),
         )
         result = await step
         self.assertIsInstance(result, Result)

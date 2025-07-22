@@ -11,8 +11,11 @@ from typing import (
     AsyncGenerator,
     AsyncIterable,
     AsyncIterator,
+    Dict,
     List,
     Sequence,
+    Set,
+    Tuple,
     Union,
 )
 
@@ -24,7 +27,8 @@ from watchdog.observers.api import BaseObserver
 
 from thx.config import reload_config
 
-from .context import prepare_contexts, resolve_contexts
+from .context import cleanup_venvs, prepare_contexts, resolve_contexts, venv_path
+from .types import ContextSpec
 
 from .runner import prepare_job
 from .types import (
@@ -74,6 +78,19 @@ async def run_step_on_context(step: Step, context: Context) -> AsyncIterator[Eve
     yield result
 
 
+def job_context(base: Context, job: Job, config: Config) -> Context:
+    extras = tuple(dict.fromkeys(list(config.extras) + list(job.extras)))
+    spec = ContextSpec(base.python_version, extras)
+    venv = venv_path(config, spec)
+    return Context(
+        base.python_version,
+        base.python_path,
+        venv,
+        live=base.live,
+        extras=extras,
+    )
+
+
 async def run_job_on_context(
     job: Job, context: Context, config: Config
 ) -> AsyncIterator[Event]:
@@ -96,12 +113,22 @@ async def run_job_on_context(
 async def run_jobs(
     jobs: Sequence[Job], contexts: Sequence[Context], config: Config
 ) -> AsyncGenerator[Event, None]:
+    job_contexts_map: Dict[Tuple[Job, Context], Context] = {}
+    all_contexts: Set[Context] = set()
+    for job in jobs:
+        for ctx in (contexts[0:1] if job.once else contexts):
+            jc = job_context(ctx, job, config)
+            job_contexts_map[(job, ctx)] = jc
+            all_contexts.add(jc)
+
     if all(job.once for job in jobs):
         LOG.debug("all jobs have once=true, trimming contexts")
-        contexts = contexts[0:1]
+        contexts_to_prepare = [job_contexts_map[(job, contexts[0])] for job in jobs]
+    else:
+        contexts_to_prepare = list(all_contexts)
 
     setup_error = False
-    async for event in prepare_contexts(contexts, config):
+    async for event in prepare_contexts(contexts_to_prepare, config):
         if isinstance(event, VenvError):
             setup_error = True
         yield event
@@ -113,12 +140,12 @@ async def run_jobs(
     success = True
     for job in jobs:
         with timed("run job", job=job):
-            if job.once:
-                generators = [run_job_on_context(job, contexts[0], config)]
-            else:
-                generators = [
-                    run_job_on_context(job, context, config) for context in contexts
-                ]
+            job_contexts = (
+                [job_contexts_map[(job, contexts[0])]]
+                if job.once
+                else [job_contexts_map[(job, ctx)] for ctx in contexts]
+            )
+            generators = [run_job_on_context(job, jc, config) for jc in job_contexts]
 
             async for event in as_generated(generators):
                 yield event
@@ -138,7 +165,6 @@ def run(
     results: List[Union[Result, VenvError]] = []
 
     config = options.config
-    contexts = resolve_contexts(config, options)
 
     job_names = options.jobs
     if not job_names:
@@ -149,6 +175,14 @@ def run(
             return 1
 
     jobs = resolve_jobs(job_names, config)
+
+    contexts = resolve_contexts(config, options)
+    all_job_contexts = {
+        job_context(ctx, job, config)
+        for job in config.jobs.values()
+        for ctx in (contexts[0:1] if job.once else contexts)
+    }
+    cleanup_venvs(config, all_job_contexts)
 
     async def runner() -> None:
         async for event in run_jobs(jobs, contexts, config):
@@ -267,6 +301,12 @@ class ThxWatchdogHandler(FileSystemEventHandler):
                         return 1
 
                 jobs = resolve_jobs(job_names, config)
+                all_job_contexts = {
+                    job_context(ctx, job, config)
+                    for job in config.jobs.values()
+                    for ctx in (contexts[0:1] if job.once else contexts)
+                }
+                cleanup_venvs(config, all_job_contexts)
 
             exit_code = 0
             results.clear()

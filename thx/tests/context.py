@@ -2,6 +2,8 @@
 # Licensed under the MIT License
 
 import asyncio
+import base64
+import hashlib
 import platform
 import subprocess
 from pathlib import Path
@@ -17,6 +19,7 @@ from ..types import (
     CommandResult,
     Config,
     Context,
+    ContextSpec,
     Event,
     Options,
     StrPath,
@@ -57,8 +60,23 @@ class ContextTest(TestCase):
             for version in TEST_VERSIONS:
                 with self.subTest(version):
                     expected = tdp / ".thx" / "venv" / str(version)
-                    result = context.venv_path(config, version)
+                    result = context.venv_path(config, ContextSpec(version))
                     self.assertEqual(expected, result)
+
+    def test_venv_path_with_extras(self) -> None:
+        extras = ["foo", "bar"]
+        spec = ContextSpec(Version("3.10"), extras)
+        digest = hashlib.sha1(",".join(sorted(extras)).encode()).digest()
+        expected_hash = base64.b32encode(digest).decode("ascii").lower().rstrip("=")
+        self.assertEqual(expected_hash, context.context_spec_hash(spec))
+        alt_spec = ContextSpec(Version("3.10"), list(reversed(extras)))
+        self.assertEqual(expected_hash, context.context_spec_hash(alt_spec))
+        with TemporaryDirectory() as td:
+            tdp = Path(td)
+            config = Config(root=tdp)
+            expected = tdp / ".thx" / "venv" / f"3.10-{expected_hash}"
+            result = context.venv_path(config, spec)
+            self.assertEqual(expected, result)
 
     @patch("thx.context.subprocess.run")
     def test_runtime_version(self, run_mock: Mock) -> None:
@@ -128,7 +146,7 @@ class ContextTest(TestCase):
                 which_mock.reset_mock()
 
                 with self.subTest(version):
-                    venv = context.venv_path(config, version)
+                    venv = context.venv_path(config, ContextSpec(version))
 
                     expected = Path(f"/fake/bin/python{version.major}")
                     result, _ = context.find_runtime(version, venv)
@@ -160,7 +178,7 @@ class ContextTest(TestCase):
                 which_mock.reset_mock()
 
                 with self.subTest(version):
-                    venv = context.venv_path(config, version)
+                    venv = context.venv_path(config, ContextSpec(version))
 
                     expected = None
                     result, _ = context.find_runtime(version, venv)
@@ -192,7 +210,7 @@ class ContextTest(TestCase):
                 which_mock.reset_mock()
 
                 with self.subTest(version):
-                    venv = context.venv_path(config, version)
+                    venv = context.venv_path(config, ContextSpec(version))
 
                     expected = None
                     result, _ = context.find_runtime(version, venv)
@@ -228,7 +246,7 @@ class ContextTest(TestCase):
                 which_mock.reset_mock()
 
                 with self.subTest(version):
-                    venv = context.venv_path(config, version)
+                    venv = context.venv_path(config, ContextSpec(version))
                     bin_dir = venv_bin_path(venv)
                     bin_dir.mkdir(parents=True, exist_ok=True)
 
@@ -255,8 +273,9 @@ class ContextTest(TestCase):
                 Context(
                     active_version,
                     Path(""),
-                    context.venv_path(config, active_version),
+                    context.venv_path(config, ContextSpec(active_version)),
                     live=True,
+                    extras=(),
                 )
             ]
             result = context.resolve_contexts(config, Options())
@@ -273,7 +292,8 @@ class ContextTest(TestCase):
             config = Config(root=tdp, versions=TEST_VERSIONS)
 
             expected_venvs = {
-                version: context.venv_path(config, version) for version in TEST_VERSIONS
+                version: context.venv_path(config, ContextSpec(version))
+                for version in TEST_VERSIONS
             }
             expected_runtimes = {
                 version: (expected_venvs[version] / "bin" / "python")
@@ -293,7 +313,12 @@ class ContextTest(TestCase):
             runtime_mock.side_effect = fake_find_runtime
 
             expected = [
-                Context(version, expected_runtimes[version], expected_venvs[version])
+                Context(
+                    version,
+                    expected_runtimes[version],
+                    expected_venvs[version],
+                    extras=(),
+                )
                 for version in TEST_VERSIONS
                 if version.minor not in skipped_minors
             ]
@@ -348,7 +373,7 @@ class ContextTest(TestCase):
             reqs.write_text("\n")
 
             venv = tdp / ".thx" / "venv" / "3.4"
-            ctx = Context(Version("3.4"), venv / "bin" / "python", venv)
+            ctx = Context(Version("3.4"), venv / "bin" / "python", venv, extras=())
             config = Config(root=tdp)
 
             with self.subTest("no venv"):
@@ -384,7 +409,9 @@ class ContextTest(TestCase):
             venv.mkdir(parents=True)
 
             config = Config(root=tdp, extras=["more"])
-            ctx = Context(Version("3.9"), venv / "bin" / "python", venv)
+            ctx = Context(
+                Version("3.9"), venv / "bin" / "python", venv, extras=("more",)
+            )
             pip = which_mock("pip", ctx)
             reqs = context.project_requirements(config)
             self.assertEqual([], reqs)
@@ -485,8 +512,18 @@ class ContextTest(TestCase):
             tdp = Path(td).resolve()
             config = Config(root=tdp)
             contexts = [
-                Context(Version("3.4"), Path("/opt/fake/python3.4"), tdp / "venv1"),
-                Context(Version("3.5"), Path("/opt/fake/python3.5"), tdp / "venv2"),
+                Context(
+                    Version("3.4"),
+                    Path("/opt/fake/python3.4"),
+                    tdp / "venv1",
+                    extras=(),
+                ),
+                Context(
+                    Version("3.5"),
+                    Path("/opt/fake/python3.5"),
+                    tdp / "venv2",
+                    extras=(),
+                ),
             ]
             events = [
                 event async for event in context.prepare_contexts(contexts, config)

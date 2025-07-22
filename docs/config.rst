@@ -76,8 +76,8 @@ The following project-level options are supported in the ``[tool.thx]`` table:
 .. attribute:: extras
     :type: list[str]
 
-    This specifies a list of package "extras" or optional dpendendencies to be
-    installed when initializing virtual environments and installing the project.
+    Default extras applied to all jobs when preparing virtual environments and
+    installing the project.
 
 .. attribute:: python_versions
     :type: list[str]
@@ -161,6 +161,12 @@ The following options are supported for each job:
 
     Any job names specified will be run before this `job`, even if they were not
     requested, or were requested after this job when invoked.
+
+.. attribute:: extras
+    :type: list[str]
+
+    Optional extras to install when preparing the virtual environment for this job.
+    These are in addition to the project-wide :attr:`extras`.
 
 .. attribute:: run
     :type: str | list[str]
