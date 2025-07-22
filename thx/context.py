@@ -1,6 +1,8 @@
 # Copyright 2022 Amethyst Reese
 # Licensed under the MIT License
 
+import hashlib
+import json
 import logging
 import os
 import platform
@@ -10,7 +12,9 @@ import subprocess
 import time
 from itertools import chain
 from pathlib import Path
-from typing import AsyncIterator, Dict, List, Optional, Sequence, Tuple
+from typing import Any, AsyncIterator, Dict, List, Mapping, Optional, Sequence, Tuple
+
+import tomli
 
 from aioitertools.asyncio import as_generated
 
@@ -33,6 +37,13 @@ LOG = logging.getLogger(__name__)
 PYTHON_VERSION_RE = re.compile(r"Python (\d+\.\d+[a-zA-Z0-9-_.]+)\+?")
 PYTHON_VERSIONS: Dict[Path, Optional[Version]] = {}
 TIMESTAMP = "thx.timestamp"
+PYPROJECT_HASH = "thx.pyproject.hash"
+PROJECT_REBUILD_KEYS = [
+    "build-system",
+    "project",
+    "tool.thx.requirements",
+    "tool.thx.extras",
+]
 
 
 def venv_path(config: Config, version: Version) -> Path:
@@ -154,28 +165,60 @@ def project_requirements(config: Config) -> Sequence[Path]:
     return paths
 
 
+def pyproject_hash(config: Config) -> str:
+    """Return a stable hash of selected ``pyproject.toml`` sections."""
+    pyproject = config.root / "pyproject.toml"
+    if not pyproject.exists():
+        return ""
+
+    content = pyproject.read_text()
+    try:
+        data = tomli.loads(content)
+    except tomli.TOMLDecodeError:
+        return ""
+
+    selected: Dict[str, Any] = {}
+    for key in PROJECT_REBUILD_KEYS:
+        parts = key.split(".")
+        current: Any = data
+        for part in parts:
+            if not isinstance(current, Mapping) or part not in current:
+                current = None
+                break
+            current = current[part]
+        if current is not None:
+            selected[key] = current
+
+    text = json.dumps(selected, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def needs_update(context: Context, config: Config) -> bool:
-    """Compare timestamps of marker file and requirements files"""
+    """Compare stored build hash and requirements timestamps"""
     try:
         timestamp = context.venv / TIMESTAMP
-        if timestamp.exists():
+        hash_file = context.venv / PYPROJECT_HASH
+
+        if timestamp.exists() and hash_file.exists():
             base = timestamp.stat().st_mtime_ns
             newest = 0
-            for path in chain(
-                [config.root / "pyproject.toml"],
-                project_requirements(config),
-            ):
+            for path in project_requirements(config):
                 if path.exists():
-                    mod_time = path.stat().st_mtime_ns
-                    newest = max(newest, mod_time)
-            return newest > base
+                    newest = max(newest, path.stat().st_mtime_ns)
+
+            if newest > base:
+                return True
+
+            stored_hash = hash_file.read_text().strip()
+            current_hash = pyproject_hash(config)
+            return stored_hash != current_hash
 
         else:
-            LOG.debug("no timestamp for %s", context.venv)
+            LOG.debug("no state for %s", context.venv)
 
     except Exception:
         LOG.warning(
-            "Failed to read timestamps of virtualenv/requirements for %s",
+            "Failed to read virtualenv state for %s",
             context.venv,
             exc_info=True,
         )
@@ -250,6 +293,7 @@ async def prepare_virtualenv(context: Context, config: Config) -> AsyncIterator[
             # timestamp marker
             content = f"{time.time_ns()}\n"
             (context.venv / TIMESTAMP).write_text(content)
+            (context.venv / PYPROJECT_HASH).write_text(pyproject_hash(config))
 
         else:
             LOG.debug("reusing existing virtualenv %s", context.venv)
