@@ -76,7 +76,7 @@ The following project-level options are supported in the ``[tool.thx]`` table:
 .. attribute:: extras
     :type: list[str]
 
-    This specifies a list of package "extras" or optional dpendendencies to be
+    This specifies a list of package "extras" or optional dependencies to be
     installed when initializing virtual environments and installing the project.
 
 .. attribute:: python_versions
