@@ -218,7 +218,7 @@ class ThxWatchdogHandler(FileSystemEventHandler):
         new_config = reload_config(old_config)
         if new_config != old_config:
             LOG.info("Config change detected")
-            self.__options.config = reload_config(self.__options.config)
+            self.__options.config = new_config
             self.__resolve = True
             self.schedule()
 
