@@ -16,7 +16,7 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "aioitertools >= 0.10.0b1",
     "click >= 8.0",

@@ -222,30 +222,51 @@ async def prepare_virtualenv(context: Context, config: Config) -> AsyncIterator[
             context.python_path = new_python_path or context.python_path
             context.python_version = new_python_version or context.python_version
 
-            # upgrade pip
-            yield VenvCreate(context, message="upgrading pip")
-            await check_command(
-                [context.python_path, "-m", "pip", "install", "-U", "pip", "setuptools"]
-            )
-            pip = which("pip", context)
+            # Determine if using uv.lock to manage dependencies
+            requirements = list(project_requirements(config))
+            using_uv_lock = any(path.name == "uv.lock" for path in requirements)
 
-            # install requirements.txt
-            requirements = project_requirements(config)
-            if requirements:
-                yield VenvCreate(context, message="installing requirements")
-                LOG.debug("installing deps from %s", requirements)
-                cmd: List[StrPath] = [pip, "install", "-U"]
-                for requirement in requirements:
-                    cmd.extend(["-r", requirement])
-                await check_command(cmd)
-
-            # install local project
-            yield VenvCreate(context, message="installing project")
-            if config.extras:
-                proj = f"{config.root}[{','.join(config.extras)}]"
+            if using_uv_lock:
+                # Install dependencies via uv sync into this venv
+                yield VenvCreate(context, message="syncing with uv")
+                uv = which("uv", context)
+                LOG.debug("syncing with uv using %s", uv)
+                await check_command(
+                    [uv, "sync", "--locked", "--python", context.python_path]
+                )
             else:
-                proj = str(config.root)
-            await check_command([pip, "install", "--editable", proj])
+                # upgrade pip
+                yield VenvCreate(context, message="upgrading pip")
+                await check_command(
+                    [
+                        context.python_path,
+                        "-m",
+                        "pip",
+                        "install",
+                        "-U",
+                        "pip",
+                        "setuptools",
+                    ]
+                )
+                pip = which("pip", context)
+
+                # install requirements.txt
+                if requirements:
+                    yield VenvCreate(context, message="installing requirements")
+                    LOG.debug("installing deps from %s", requirements)
+                    cmd: List[StrPath] = [pip, "install", "-U"]
+                    for requirement in requirements:
+                        cmd.extend(["-r", requirement])
+                    await check_command(cmd)
+
+            # install local project (pip) unless managed by uv
+            if not using_uv_lock:
+                yield VenvCreate(context, message="installing project")
+                if config.extras:
+                    proj = f"{config.root}[{','.join(config.extras)}]"
+                else:
+                    proj = str(config.root)
+                await check_command([pip, "install", "--editable", proj])
 
             # timestamp marker
             content = f"{time.time_ns()}\n"

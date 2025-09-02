@@ -227,6 +227,26 @@ class ConfigTest(TestCase):
             self.assertDictEqual(expected.values, result.values)
             self.assertEqual(expected, result)
 
+    def test_requirements_uv_lock_only(self) -> None:
+        with fake_pyproject(
+            """
+            [tool.thx]
+            requirements = "uv.lock"
+            """
+        ) as td:
+            result = load_config(td)
+            self.assertEqual(["uv.lock"], list(result.requirements))
+
+    def test_requirements_uv_lock_mixed_rejected(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "uv.lock cannot be mixed"):
+            with fake_pyproject(
+                """
+                [tool.thx]
+                requirements = ["uv.lock", "requirements.txt"]
+                """
+            ) as td:
+                load_config(td)
+
     def test_reload_config(self) -> None:
         with fake_pyproject(
             """

@@ -498,3 +498,46 @@ class ContextTest(TestCase):
             for event in expected:
                 self.assertIn(event, events)
             venv_mock.assert_has_calls([call(ctx, config) for ctx in contexts])
+
+    @patch("thx.context.check_command")
+    @patch("thx.context.which")
+    @async_test
+    async def test_prepare_virtualenv_with_uv_lock(
+        self, which_mock: Mock, run_mock: Mock
+    ) -> None:
+        async def fake_check_command(cmd: Sequence[StrPath]) -> CommandResult:
+            return CommandResult(0, "", "")
+
+        run_mock.side_effect = fake_check_command
+        which_mock.side_effect = lambda b, ctx: f"{ctx.venv / 'bin'}/{b}"
+
+        with TemporaryDirectory() as td:
+            tdp = Path(td).resolve()
+            venv = tdp / ".thx" / "venv" / "3.11"
+            venv.mkdir(parents=True)
+
+            config = Config(root=tdp, requirements=["uv.lock"])
+            ctx = Context(Version("3.11"), venv / "bin" / "python", venv)
+
+            events = [event async for event in context.prepare_virtualenv(ctx, config)]
+
+            # Expect uv sync path to be taken
+            self.assertIn(VenvCreate(ctx, "syncing with uv"), events)
+            self.assertIn(VenvReady(ctx), events)
+
+            # Verify uv sync was called with locked and python
+            run_mock.assert_any_call(
+                [
+                    which_mock("uv", ctx),
+                    "sync",
+                    "--locked",
+                    "--python",
+                    ctx.python_path,
+                ]
+            )
+
+            # Ensure no pip editable/project install or -r requirements was attempted
+            for call_args in run_mock.call_args_list:
+                args0 = list(call_args.args[0])
+                self.assertNotIn("--editable", args0)
+                self.assertNotIn("-r", args0)

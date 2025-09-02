@@ -163,7 +163,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     values = ensure_dict(data.pop("values", {}), "tool.thx.values")
     values.update(data)
 
-    return validate_config(
+    config = validate_config(
         Config(
             root=root,
             default=default,
@@ -175,6 +175,19 @@ def load_config(path: Optional[Path] = None) -> Config:
             watch_paths=watch_paths,
         )
     )
+
+    # Validate requirements: disallow mixing uv.lock with other files
+    # If users opt into uv by specifying uv.lock, it must be the only entry.
+    if any(Path(r).name == "uv.lock" for r in config.requirements):
+        if (
+            len(config.requirements) != 1
+            or Path(config.requirements[0]).name != "uv.lock"
+        ):
+            raise ConfigError(
+                "Option tool.thx.requirements: uv.lock cannot be mixed with other files"
+            )
+
+    return config
 
 
 def reload_config(config: Config) -> Config:
