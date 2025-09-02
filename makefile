@@ -6,35 +6,38 @@ ifdef UV
 	VENV:=uv venv
 	PIP:=uv pip
 else
-	VENV:=python -m venv
-	PIP:=python -m pip
+	VENV:=python3 -m venv
+	PIP:=.venv/bin/python3 -m pip
 endif
 
-install:
+PYTHON := .venv/bin/python3
+
+.PHONY: .venv install venv format lint test html clean distclean
+
+install: .venv
 	$(PIP) install -Ue .[$(EXTRAS)]
 
 .venv:
 	$(VENV) .venv
 
-venv: .venv
-	source .venv/bin/activate && make install
+venv: install
 	echo 'run `source .venv/bin/activate` to activate virtualenv'
 
-format:
-	python -m ufmt format $(PKG)
+format: venv
+	$(PYTHON) -m ufmt format $(PKG)
 
-lint:
-	python -m flake8 $(PKG)
-	python -m ufmt check $(PKG)
+lint: venv
+	$(PYTHON) -m flake8 $(PKG)
+	$(PYTHON) -m ufmt check $(PKG)
 
-test:
-	python -m coverage run -m $(PKG).tests
-	python -m coverage combine
-	python -m coverage report
-	python -m mypy --install-types --non-interactive -p $(PKG)
+test: venv
+	. .venv/bin/activate && $(PYTHON) -m coverage run -m $(PKG).tests
+	$(PYTHON) -m coverage combine
+	$(PYTHON) -m coverage report
+	$(PYTHON) -m mypy --install-types --non-interactive -p $(PKG)
 
-html: .venv README.rst docs/*.rst docs/conf.py
-	source .venv/bin/activate && sphinx-build -b html docs html
+html: venv README.rst docs/*.rst docs/conf.py
+	. .venv/bin/activate && sphinx-build -b html docs html
 
 clean:
 	rm -rf build dist html *.egg-info .mypy_cache
